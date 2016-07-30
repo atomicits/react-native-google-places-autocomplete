@@ -1,5 +1,5 @@
 import React, { PropTypes } from 'react';
-import { TextInput, View, ListView, Image, Text, Dimensions, TouchableHighlight, TouchableWithoutFeedback, Platform, ActivityIndicator, ProgressBarAndroid, PixelRatio } from 'react-native';
+import {Alert, TextInput, View, ListView, Image, Text, Dimensions, TouchableHighlight, TouchableWithoutFeedback, Platform, ActivityIndicator, ProgressBarAndroid, PixelRatio } from 'react-native';
 import Qs from 'qs';
 
 const defaultStyles = {
@@ -197,7 +197,9 @@ const GooglePlacesAutocomplete = React.createClass({
       },
       (error) => {
         this._disableRowLoaders();
-        alert(error.message);
+        Alert.alert('GPS not found', "Please enable GPS for current location", [
+          {text: "OK"}
+        ]);
       },
       {enableHighAccuracy: true, timeout: 20000, maximumAge: 1000}
     );
