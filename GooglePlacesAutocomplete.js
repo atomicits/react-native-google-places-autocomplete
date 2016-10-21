@@ -1,5 +1,5 @@
 import React, { PropTypes } from 'react';
-import {Alert, TextInput, View, ListView, Image, Text, Dimensions, TouchableHighlight, TouchableWithoutFeedback, Platform, ActivityIndicator, ProgressBarAndroid, PixelRatio } from 'react-native';
+import {Alert, TextInput, View, ListView, Image, Text, Dimensions, TouchableHighlight, TouchableOpacity, TouchableWithoutFeedback, Platform, ActivityIndicator, PixelRatio } from 'react-native';
 import Qs from 'qs';
 
 const defaultStyles = {
@@ -57,6 +57,12 @@ const defaultStyles = {
   androidLoader: {
     marginRight: -15,
   },
+  currentLocationText: {
+    color: '#808080'
+  },
+  currentLocationTextClicked: {
+    color: '#1E90FF'
+  }
 };
 
 const GooglePlacesAutocomplete = React.createClass({
@@ -82,7 +88,8 @@ const GooglePlacesAutocomplete = React.createClass({
     nearbyPlacesAPI: React.PropTypes.string,
     filterReverseGeocodingByTypes: React.PropTypes.array,
     predefinedPlacesAlwaysVisible: React.PropTypes.bool,
-    enableEmptySections: React.PropTypes.bool
+    enableEmptySections: React.PropTypes.bool,
+    currentLocationClicked: React.PropTypes.bool
   },
 
   getDefaultProps() {
@@ -92,6 +99,7 @@ const GooglePlacesAutocomplete = React.createClass({
       minLength: 0,
       fetchDetails: false,
       autoFocus: false,
+      currentLocationClicked: false,
       getDefaultValue: () => '',
       timeout: 20000,
       onTimeout: () => console.warn('google places autocomplete: request timeout'),
@@ -116,7 +124,8 @@ const GooglePlacesAutocomplete = React.createClass({
       nearbyPlacesAPI: 'GooglePlacesSearch',
       filterReverseGeocodingByTypes: [],
       predefinedPlacesAlwaysVisible: false,
-      enableEmptySections: true
+      enableEmptySections: true,
+      showClearButton: false
     };
   },
 
@@ -201,7 +210,7 @@ const GooglePlacesAutocomplete = React.createClass({
           {text: "OK"}
         ]);
       },
-      {enableHighAccuracy: true, timeout: 20000, maximumAge: 1000}
+      // {enableHighAccuracy: true, timeout: 20000, maximumAge: 1000}
     );
   },
 
@@ -265,6 +274,10 @@ const GooglePlacesAutocomplete = React.createClass({
 
               delete rowData.isLoading;
               this.props.onPress(rowData, details);
+              this.setState({listViewDisplayed: true,
+                dataSource: this.state.dataSource.cloneWithRows(this.buildRowsFromResults([]))  
+              });
+              
             }
           } else {
             this._disableRowLoaders();
@@ -282,20 +295,22 @@ const GooglePlacesAutocomplete = React.createClass({
       }));
       request.send();
     } else if (rowData.isCurrentLocation === true) {
+      if (this.state.currentLocationClicked){
+        this.setState({
+          currentLocationClicked: false,
+          text: ""
+        })
+        this.props.onPress({"description": ""});
+      }else{
+         this.setState({
+          currentLocationClicked: true
+        })
+        // display loader
 
-      // display loader
-      this._enableRowLoader(rowData);
+        this.triggerBlur(); // hide keyboard but not the results
 
-
-      this.setState({
-        text: rowData.description,
-      });
-      this.triggerBlur(); // hide keyboard but not the results
-
-      delete rowData.isLoading;
-
-      this.getCurrentLocation();
-
+        this.getCurrentLocation();
+      }
     } else {
       this.setState({
         text: rowData.description,
@@ -367,6 +382,14 @@ const GooglePlacesAutocomplete = React.createClass({
               var results = [];
               if (this.props.nearbyPlacesAPI === 'GoogleReverseGeocoding') {
                 results = this._filterResultsByTypes(responseJSON, this.props.filterReverseGeocodingByTypes);
+                var desc = results[0] ? results[0].formatted_address : "";
+                this.setState({
+                  text: desc,
+                  showClearButton: false
+                });
+                this.props.onPress({"description": desc});
+                results = [];
+                
               } else {
                 results = responseJSON.results;
               }
@@ -461,7 +484,7 @@ const GooglePlacesAutocomplete = React.createClass({
   _getRowLoader() {
     if (Platform.OS === 'android') {
       return (
-        <ProgressBarAndroid
+        <ActivityIndicator
           style={[defaultStyles.androidLoader, this.props.styles.androidLoader]}
           styleAttr="Inverse"
         />
@@ -475,7 +498,20 @@ const GooglePlacesAutocomplete = React.createClass({
     );
   },
 
-  _renderLoader(rowData) {
+  _locationImage(rowData){
+    if(rowData.description === "Current Location"){
+      var imageSource = this.state.currentLocationClicked ?  require('./images/location_2.png') : require('./images/location_1.png') ;
+      return (
+        <Image
+          style={{height:20, width: 10, top: 2, right: 5}}
+          resizeMode={Image.resizeMode.contain}
+          source={imageSource}
+        />
+      );
+    }
+  },
+
+  _renderLoader(rowData){
     if (rowData.isLoading === true) {
       return (
         <View
@@ -490,7 +526,7 @@ const GooglePlacesAutocomplete = React.createClass({
 
   _renderRow(rowData = {}) {
     rowData.description = rowData.description || rowData.formatted_address || rowData.name;
-
+    var rowDataStyle = this.state.currentLocationClicked ? defaultStyles.currentLocationTextClicked : defaultStyles.currentLocationText
     return (
       <TouchableHighlight
         onPress={() =>
@@ -499,9 +535,10 @@ const GooglePlacesAutocomplete = React.createClass({
         underlayColor="#c8c7cc"
       >
         <View>
-          <View style={[defaultStyles.row, this.props.styles.row, rowData.isPredefinedPlace ? this.props.styles.specialItemRow : {}]}>
+          <View style={[defaultStyles.row, this.props.styles.row, rowData.isPredefinedPlace ? this.props.styles.specialItemRow : {}, rowData.isCurrentLocation ?  defaultStyles.currentLocationTextWrap : {}]}>
+            {this._locationImage(rowData)}
             <Text
-              style={[{flex: 1}, defaultStyles.description, this.props.styles.description, rowData.isPredefinedPlace ? this.props.styles.predefinedPlacesDescription : {}]}
+              style={[{flex: 1}, defaultStyles.description, this.props.styles.description, rowData.isPredefinedPlace ? this.props.styles.predefinedPlacesDescription : {}, rowData.isCurrentLocation ?  defaultStyles.currentLocationText : {}, rowData.isCurrentLocation ? rowDataStyle : {}]}
               numberOfLines={1}
             >
               {rowData.description}
@@ -517,10 +554,12 @@ const GooglePlacesAutocomplete = React.createClass({
   _onBlur() {
     this.triggerBlur();
     this.setState({listViewDisplayed: false});
+    this.setState({listViewDisplayed: false, showClearButton: false});
   },
 
   _onFocus() {
     this.setState({listViewDisplayed: true});
+    this.setState({listViewDisplayed: true, showClearButton: true});
   },
 
   _getListView() {
@@ -555,6 +594,29 @@ const GooglePlacesAutocomplete = React.createClass({
 
     return null;
   },
+
+  _renderClearButton: function() {
+    if(Platform.OS === 'android' && this.state.showClearButton) {
+      return (
+        <View style={{position: 'absolute', right:10, top:20, height:20}}>
+          <TouchableOpacity
+            onPress={() => {
+              this.setState({text:''});
+              this.refs.textInput.focus();
+            }}
+          >
+            <Image
+              style={{height:20}}
+              resizeMode={Image.resizeMode.contain}
+              source={require('./images/clear.png')}
+            />
+          </TouchableOpacity>
+        </View>
+      );
+    } else {
+      return null;
+    }
+  },
   render() {
     let { onChangeText, onFocus, ...userProps } = this.props.textInputProps;
     return (
@@ -575,6 +637,7 @@ const GooglePlacesAutocomplete = React.createClass({
             onFocus={onFocus ? () => {this._onFocus(); onFocus()} : this._onFocus}
             clearButtonMode="while-editing"
           />
+          {this._renderClearButton()}
         </View>
         {this._getListView()}
       </View>
